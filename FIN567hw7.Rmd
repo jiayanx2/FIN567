@@ -1,0 +1,249 @@
+---
+title: "Hw7"
+author: "Liwen Jiang, Huiying Liu, Zixiao Wang, Jiayan Xu, Lingxiang Zhang"
+output: pdf_document
+---
+
+We get return data of the two underlying securities, EFA and IWM.
+```{r echo=FALSE}
+#install and library
+library(readxl)
+setwd("/Users/yynpy/Desktop/courses/FIN567 financial risk management/hw/hw7")
+#import data
+rawdata <- read_excel("F567.HW7.data.xlsx")
+data <- rawdata[-c(1,2,3),]
+```
+
+```{r seperate}
+EFA <- as.numeric(data$X__1)
+IWM <- as.numeric(data$X__2)
+logreturn.EFA <- diff(log(EFA),lag = 1)
+logreturn.IWM <- diff(log(IWM),lag = 1)
+```
+
+## 1 NGARCH(1,1) parameters
+The NGARCH(1,1) model can be written as
+$$\sigma_{t + 1}^2 = \sigma^2(1 - \alpha(1 + \theta^2) - \beta) + \alpha(R_t - \theta\sigma_t)^2 + \beta\sigma_t^2$$
+The MLE NGARCH parameters are estimated by self-defined function MLE.NGARCH.
+```{r NGARCH}
+MLE.NGARCH <- function(R, x) {
+  alpha <- x[1]
+  beta <- x[2]
+  sigma.square <- x[3]^2
+  sigma1.square <- x[4]^2
+  leverage.effect <- x[5]
+  
+  sigma.t.square <- NULL #initialize sigma.t
+  
+  if(alpha + beta >= 1 || alpha>1 || alpha<0 || beta>1 || beta<0 || x[3]<0 || x[4]<0){
+    return (9999)
+  }
+  
+  for(i in 1 : length(R)) { 
+    if (i == 1)
+      sigma.t.square[i] <- sigma1.square
+    else
+      sigma.t.square[i] <- (1 - alpha * (1+leverage.effect^2) - beta) * sigma.square + alpha * (R[i-1]-leverage.effect*sqrt(sigma.t.square[i-1]))^2 + beta * sigma.t.square[i - 1]
+    
+    if(sigma.t.square[i]<0)
+      return (9999)
+  }
+  
+  return (0.5*sum(log(sigma.t.square) + R^2 / sigma.t.square + log(2 * pi)))
+  
+}
+```
+
+```{r}
+fit.EFA <- optim(c(0.06,0.87,0.015,0.013,0.98), function(x){MLE.NGARCH(logreturn.EFA, x)})
+fit.IWM <- optim(c(0.06,0.82,0.016,0.013,1.23), function(x){MLE.NGARCH(logreturn.IWM, x)})
+NGARCH.par <- matrix(c(fit.EFA$par,-fit.EFA$value,fit.IWM$par,-fit.IWM$value), ncol = 6, byrow = T)
+colnames(NGARCH.par) <- c("alpha", "beta", "sigma", "sigma1", "leverage effect","maximun likelihood")
+rownames(NGARCH.par) <- c("EFA","IMW")
+NGARCH.par
+```
+Once we have estimated value of parameters, to calculate long-run average correlation, we
+
+1. calculate each day's dynamic standard deviation
+
+2. standardize each return by its dynamic standard deviation
+$$z_{i,t} = \frac{R_{i,t}}{\sigma_{i,t}};i=1,2;t=1,2,...n,$$
+where $n = length(logreturn)$
+
+3. take the average of each day's correlation: 
+$$\hat \rho = \frac{1}{T}\sum_{t=1}^{T}z_{1,t}z_{2,t};t=1,2,...n,$$
+```{r z}
+#initialize sigma.t
+sigma.t.square.EFA <- NULL
+sigma.t.square.IWM <- NULL
+#define sigma1
+sigma.t.square.EFA[1] <- fit.EFA$par[4]^2
+sigma.t.square.IWM[1] <- fit.IWM$par[4]^2
+
+n <- length(logreturn.EFA) - 1
+
+for(i in 1 : n) {
+  sigma.t.square.EFA[i + 1] <- (1 - fit.EFA$par[1] * (1 + fit.EFA$par[5]^2) - fit.EFA$par[2]) * fit.EFA$par[3]^2 + fit.EFA$par[1] * (logreturn.EFA[i]-fit.EFA$par[5]*sqrt(sigma.t.square.EFA[i]))^2 + fit.EFA$par[2] * sigma.t.square.EFA[i]
+  sigma.t.square.IWM[i + 1] <- (1 - fit.IWM$par[1] * (1+fit.IWM$par[5]^2) - fit.IWM$par[2]) * fit.IWM$par[3]^2 + fit.IWM$par[1] * (logreturn.IWM[i]-fit.IWM$par[5]*sqrt(sigma.t.square.IWM[i]))^2 + fit.IWM$par[2] * sigma.t.square.IWM[i]
+}
+
+#compute z
+z.EFA <- logreturn.EFA / sqrt(sigma.t.square.EFA)
+z.IWM <- logreturn.IWM / sqrt(sigma.t.square.IWM)
+#compute rho
+rho <- sum(z.EFA * z.IWM/length(logreturn.EFA))
+rho
+```
+
+## 2 DCC(1,1) parameters
+To get DCC(1,1) parameters we use the $z$ and $\hat\rho$ we calculate from Question1. 
+$$q_{12,t+1} = \hat\rho + \alpha(z_{1,t}z_{2,t} - \hat\rho) + \beta(q_{12,t} - \hat\rho); t = 1,2,...,n$$
+<br />
+where $\hat\rho=\frac{1}{T}\sum_{t=1}^{T}z_{1,t}z_{2,t}$
+$$q_{11,t+1} = 1 + \alpha(z_{1,t}^2 - 1) + \beta(q_{11,t} - 1)$$
+$$q_{22,t+1} = 1 + \alpha(z_{2,t}^2 - 1) + \beta(q_{22,t} - 1)$$
+$$\rho_{12,t + 1} = \frac{q_{12,t + 1}}{\sqrt{q_{11,t + 1}q_{22,t + 1}}}$$
+```{r}
+MLE.NGARCH.DCC <- function(x)
+{
+  alpha <- x[1]
+  beta <- x[2]
+  
+  q12 <- NULL
+  q11 <- NULL 
+  q22 <- NULL
+  rho.12 <- NULL
+  q12[1] <- rho
+  q11[1] <- 1
+  q22[1] <- 1
+  
+  for(i in 1 : n) { 
+      q12[i + 1] <- rho + alpha*(z.EFA[i]*z.IWM[i]-rho) + beta*(q12[i]-rho)
+      q11[i + 1] <- 1 + alpha*(z.EFA[i]^2-1) + beta*(q22[i]-1)
+      q22[i + 1] <- 1 + alpha*(z.IWM[i]^2-1) + beta*(q11[i]-1)
+  }
+
+  for(i in 1 : length(logreturn.EFA)){
+    if(q11[i]<=0 || q22[i]<=0)
+      return (99999)
+    rho.12[i] <- q12[i] / sqrt(q11[i]*q22[i])
+    if(rho.12[i] >= 1) 
+      return (99999)
+  }
+  
+  return (sum(log(1-rho.12^2) + (z.IWM^2 + z.EFA^2 - 2*rho.12*z.EFA*z.IWM)/(1-rho.12^2))/2)
+}
+```
+
+```{r}
+fit.dcc <- optim(c(0.029,0.95), fn = function(x){MLE.NGARCH.DCC(x)})
+```
+
+```{r}
+DCC.par <- matrix(c(fit.dcc$par,fit.dcc$value),nrow = 1)
+colnames(DCC.par) <- c("alpha", "beta","maximum likelihood")
+rownames(DCC.par) <- c("DCC")
+DCC.par
+```
+
+## 3 Monte Carlo
+We run 10000 256-day return paths from August 5, 2014 to August 10, 2015. In each simulation, we
+
+1. forecast of each day's correlation $\rho_t$ using DCC(1,1) method
+
+2. with correlation $\rho_t$, simulate two related random variables $z_1$ and $z_2$ for each day.
+$$z_{2,t} = \rho_{t}z_{1,t} + \sqrt{1-\rho_{t}^2}*Z_t$$
+where $Z_t$ is independant of $z_{1,t}$, $z_{1,t},Z_t \sim N(0,1)$
+
+3. forecast variances for each day using NGARCH(1,1) parameters in Question1.
+$$\sigma_{i,t + 1}^2 = \hat\sigma_i^2(1 - \hat\alpha_i(1 + \hat\theta_i^2) - \hat\beta_i) + \hat\alpha_i(R_{i,t} - \hat\theta_i\sigma_{i,t})^2 + \hat\beta_i\sigma_{i,t}^2; i = 1,2; t = 1,2,...256,$$
+4. forecast logreturn of each day by multipying random variable with sigma
+$$R_{i,t} = z_{i,t}\sigma_{i,t}; i = 1,2; t = 1,2,...256,$$
+5. see if aggregated $R_{i,t}$ are above buffer amount. forecast maturity payment
+```{r simulation}
+MP <- NULL
+positive.MP <- NULL
+mc.return.EFA <- NULL
+mc.return.IWM <- NULL
+
+for (j in 1:100){
+  alpha1 <- fit.EFA$par[1]
+  beta1 <- fit.EFA$par[2]
+  alpha2 <- fit.IWM$par[1]
+  beta2 <- fit.IWM$par[2]
+  alpha <- fit.dcc$par[1]
+  beta <- fit.dcc$par[2]
+
+  #simulate each day's correlation mc.rho
+  mc.rho <- NULL
+  z1 <- NULL
+  z2 <- NULL
+  q11 <- NULL
+  q22 <- NULL
+  q12 <- NULL
+
+  mc.rho[1] <- rho
+  z1[1] <- rnorm(1)
+  z2[1] <- mc.rho[1] * z1[1] + sqrt(1 - mc.rho[1]^2) * rnorm(1)
+  q11[1] <- 1
+  q22[1] <- 1
+  q12[1] <- rho
+
+  for(t in 1: 255){
+    q12[t + 1] <- rho + alpha * (z1[t] * z2[t] - rho) + beta * (q12[t] - rho)
+    q11[t + 1] <- 1 + alpha * (z1[t]^2 - 1) + beta * (q11[t] - 1)
+    q22[t + 1] <- 1 + alpha * (z2[t]^2 - 1) + beta * (q22[t] - 1)
+    mc.rho[t + 1] <- q12[t + 1] / sqrt(q11[t + 1] * q22[t + 1])
+    z1[t + 1] <- rnorm(1)
+    z2[t + 1] <- mc.rho[t + 1] * z1[t + 1] + sqrt(1 - mc.rho[t + 1]^2) * rnorm(1)
+  }
+
+  #forecast each day's varainces using NGARCH(1,1)
+  mc.sigma.square1 <- NULL
+  mc.sigma.square2 <- NULL
+  sigma1 <- fit.EFA$par[3]
+  sigma2 <- fit.IWM$par[3]
+  sigma11 <- fit.EFA$par[4]
+  sigma12 <- fit.IWM$par[4]
+  theta1 <- fit.EFA$par[5]
+  theta2 <- fit.IWM$par[5]
+  R1 <- NULL
+  R2 <- NULL
+
+  mc.sigma.square1[1] <- sigma11^2 
+  mc.sigma.square2[1] <- sigma12^2
+  R1[1] <- z1[1] * sqrt(mc.sigma.square1[1])
+  R2[1] <- z2[1] * sqrt(mc.sigma.square2[1])
+
+  for (t in 1: 255){
+    mc.sigma.square1[t + 1] <- sigma1^2 * (1 - alpha1 * (1 + theta1^2) - beta1) + alpha1 * (R1[t] - theta1 * sqrt(mc.sigma.square1[t]))^2 + beta1 * mc.sigma.square1[t]
+    mc.sigma.square2[t + 1] <- sigma2^2 * (1 - alpha2 * (1 + theta2^2) - beta2) + alpha2 * (R2[t] - theta2 * sqrt(mc.sigma.square2[t]))^2 + beta2 * mc.sigma.square2[t]
+    R1[t + 1] <- z1[t + 1] * sqrt(mc.sigma.square1[t + 1])
+    R2[t + 1] <- z2[t + 1] * sqrt(mc.sigma.square2[t + 1])
+  }
+    
+  mc.return.EFA[j] <- sum(R1)
+  mc.return.IWM[j] <- sum(R2)
+
+  downside.factor <- 1.1765
+  #If the final share price of each of the underlying shares is greater than or equal to its respective buffer level:
+  if(mc.return.EFA[j] >= -0.15 && mc.return.EFA[j] >= -0.15)
+    MP[j] <- 1000 #maturity payment
+  #If the final share price of either of the underlying shares is less than its respective buffer level:
+  else
+    MP[j] <- 1000 + (1000*(min(mc.return.EFA[j],mc.return.IWM[j]) + 0.15))*downside.factor
+  
+  if(MP[j] < 0)
+    positive.MP[j] <- 0
+  else
+    positive.MP[j] <- MP[j]
+}
+  
+#Yield on the Deposit
+YOTD <- 0.5618/100
+EV <- mean(positive.MP)*exp(-256/252*YOTD)
+for(i in 1:12) { #include the discounted coupon rate
+  EV <- EV + 4.1833*exp(-i*30/360*YOTD)
+  }
+EV
+```

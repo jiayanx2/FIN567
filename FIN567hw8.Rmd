@@ -1,0 +1,219 @@
+---
+title: "FIN567hw8"
+author: "Liwen Jiang, Huiying Liu, Zixiao Wang, Jiayan Xu, Lingxiang Zhang"
+output: pdf_document
+---
+
+## Q1
+(a)
+```{r define portfolio}
+portfolio <- NULL
+  for (i in 1:80){portfolio[i] = 10}
+  for (i in 81:100){portfolio[i] = 20}
+```
+```{r Q1a}
+loss.1a <- NULL
+for (j in 1:10000){
+  b <- runif(100)
+  ifdefault <- NULL
+  for (i in 1:100){
+    if (b[i] > 0.02) ifdefault[i] <- 0
+    else ifdefault[i] <- 1
+  }
+  loss.1a[j] <- sum(ifdefault * portfolio)
+}
+hist(loss.1a,50,xlab = "Possible Losses")
+```
+
+(b)
+```{r q1b}
+loss.1b <- NULL
+for (j in 1:10000){
+  rho <- 0.3
+  m <- rnorm(1)
+  z <- NULL
+  u <- NULL
+  ifdefault <- NULL
+  for (i in 1:100){
+    z[i] <- (sqrt(rho))*m +(sqrt(1 - rho))*rnorm(1)
+    u[i] <- pnorm(z[i])
+    if (u[i] > 0.02) ifdefault[i] <- 0
+    else ifdefault[i] <- 1
+  }
+  loss.1b[j] <- sum(ifdefault * portfolio)
+}
+hist(loss.1b,50,xlab = "Possible Losses")
+```
+
+(c)
+```{r Q1c}
+isdefault1 <- NULL
+isdefault2 <- NULL
+isdefault.sum <- NULL
+z1 <- NULL
+  u1 <- NULL
+  z2 <- NULL
+  u2 <- NULL
+n <- 10000
+for (j in 1:n){
+  isdefault1[j] <- 0
+  isdefault2[j] <- 0
+  isdefault.sum[j] <- 0
+  m <- rnorm(1)
+  z1[j] <- (sqrt(rho))*m +(sqrt(1 - rho))*rnorm(1)
+  u1[j] <- pnorm(z1[j])
+  if (u1[j] <= 0.02)
+    isdefault1[j] <- 1
+  z2[j] <- (sqrt(rho))*m +(sqrt(1 - rho))*rnorm(1)
+  u2[j] <- pnorm(z2[j])
+  if (u2[j] <= 0.02)
+    isdefault2[j] <- 1
+  if (isdefault1[j] == 1 && isdefault2[j] == 1)
+    isdefault.sum[j] <- 1
+}
+p.ab <- sum(isdefault.sum)/n
+p.a <- sum(isdefault1)/n
+p.b <- sum(isdefault2)/n
+defaultCorr <- (p.ab - p.a*p.b)/sqrt(p.a*(1 - p.a)*p.b*(1 - p.b))
+defaultCorr
+```
+
+(d)
+```{r Q1d}
+isdefault1 <- NULL
+isdefault2 <- NULL
+isdefault.sum <- NULL
+z1 <- NULL
+u1 <- NULL
+z2 <- NULL
+u2 <- NULL
+n <- 100000
+rho <- 0.26
+for (j in 1:n){
+  isdefault1[j] <- 0
+  isdefault2[j] <- 0
+  isdefault.sum[j] <- 0
+  m <- rnorm(1)
+  z1[j] <- (sqrt(rho))*m +(sqrt(1 - rho))*rnorm(1)
+  u1[j] <- pnorm(z1[j])
+  if (u1[j] <= 0.02)
+    isdefault1[j] <- 1
+  z2[j] <- (sqrt(rho))*m +(sqrt(1 - rho))*rnorm(1)
+  u2[j] <- pnorm(z2[j])
+  if (u2[j] <= 0.02)
+    isdefault2[j] <- 1
+  if (isdefault1[j] == 1 && isdefault2[j] == 1)
+    isdefault.sum[j] <- 1
+}
+p.ab <- sum(isdefault.sum)/n
+p.a <- sum(isdefault1)/n
+p.b <- sum(isdefault2)/n
+defaultCorr <- (p.ab - p.a*p.b)/sqrt(p.a*(1 - p.a)*p.b*(1 - p.b))
+defaultCorr
+```
+By trials, we find that the copula correlation of 26% is consistent with a default correlation of 0.05.
+
+##Q2
+(a)
+```{r 2a}
+EC.2a <- unname(quantile(loss.1a,0.999)) - 0.02*sum(portfolio)
+EC.2a
+```
+By simulation, the Economic Capital required to support the loan portfolio is the above number million.
+
+(b)
+```{r q2b}
+EC.2b <- unname(quantile(loss.1b,0.999)) - mean(loss.1b)
+EC.2b
+```
+By simulation, the Economic Capital required to support the loan portfolio when Copula Correlation is 30% is the above number million.
+
+##Q3
+(a)
+```{r Q3a}
+loss.3a <- NULL
+hedged.loss.3a <- NULL
+for (j in 1:10000){
+  b <- runif(100)
+  ifdefault <- NULL
+  for (i in 1:100){
+    if (b[i] > 0.02) ifdefault[i] <- 0
+    else ifdefault[i] <- 1
+  }
+  loss.3a[j] <- sum(ifdefault * portfolio)
+  if(sum(tail(ifdefault,20)) > 2) hedged.loss.3a[j] <- loss.3a[j] - 40
+  else hedged.loss.3a[j] <- sum(head(ifdefault,80) * head(portfolio,80))
+}
+hist(hedged.loss.3a,50,xlab = "Possible Losses")
+```
+
+(b)
+```{r Q3bresult}
+EC.3b <- unname(quantile(hedged.loss.3a,0.999)) - mean(hedged.loss.3a)
+#EC.3b <- unname(quantile(hedged.loss.3a,0.999)) - 20
+EC.3b
+```
+
+(c)
+```{r 3c}
+loss.3c <- NULL
+hedged.loss.3c <- NULL
+for (j in 1:10000){
+  rho <- 0.3
+  m <- rnorm(1)
+  z <- NULL
+  u <- NULL
+  ifdefault <- NULL
+  for (i in 1:100){
+    z[i] <- (sqrt(rho))*m +(sqrt(1 - rho))*rnorm(1)
+    u[i] <- pnorm(z[i])
+    if (u[i] > 0.02) ifdefault[i] <- 0
+    else ifdefault[i] <- 1
+  }
+  loss.3c[j] <- sum(ifdefault * portfolio)
+  if(sum(tail(ifdefault,20)) > 2) hedged.loss.3c[j] <- loss.3c[j] - 40
+  else hedged.loss.3c[j] <- sum(head(ifdefault,80) * head(portfolio,80))
+}
+hist(hedged.loss.3c,50,xlab = "Possible Losses")
+```
+
+```{r 3cEC}
+EC.3c <- unname(quantile(hedged.loss.3c,0.999)) - mean(hedged.loss.3c)
+EC.3c
+```
+
+##Q4
+(a)
+```{r 4a}
+loss.4a <- NULL
+for (j in 1:10000){
+  b <- runif(100)
+  ifdefault <- NULL
+  for (i in 1:100){
+    if (b[i] > 0.02) ifdefault[i] <- 0
+    else ifdefault[i] <- 1
+  }
+  loss.4a[j] <- sum(ifdefault * portfolio * (1 - rbeta(100,2,2)))
+}
+hist(loss.4a,50,xlab = "Possible Losses")
+```
+
+(b)
+```{r Q4b}
+loss.4b <- NULL
+for (j in 1:10000){
+  rho <- 0.3
+  m <- rnorm(1)
+  z <- NULL
+  u <- NULL
+  ifdefault <- NULL
+  for (i in 1:100){
+    z[i] <- (sqrt(rho))*m +(sqrt(1 - rho))*rnorm(1)
+    u[i] <- pnorm(z[i])
+    if (u[i] > 0.02) ifdefault[i] <- 0
+    else ifdefault[i] <- 1 - beta(2,2)
+  }
+  loss.4b[j] <- sum(ifdefault * portfolio)
+}
+hist(loss.4b,50,xlab = "Possible Losses")
+```

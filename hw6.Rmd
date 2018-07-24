@@ -1,0 +1,72 @@
+---
+title: "Hw6"
+author: "Jiayan"
+date: "4/6/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+We seperate the data by date, and pick the stock prices.
+```{r echo=FALSE}
+library(readxl)
+goog <- read_excel("/Users/yynpy/Desktop/courses/FIN567 financial risk management/hw/hw6/F567C.s2018.HW6.GOOG data.xlsx")
+goog <- goog[-c(1,2,3,4),]
+```
+
+```{r seperate}
+d1 <- subset(goog,X__1=='41311')
+d2 <- subset(goog,X__1=='41312')
+d3 <- subset(goog,X__1=='41313')
+d4 <- subset(goog,X__1=='41316')
+d5 <- subset(goog,X__1=='41317')
+d6 <- subset(goog,X__1=='41318')
+d7 <- subset(goog,X__1=='41319')
+d8 <- subset(goog,X__1=='41320')
+d9 <- subset(goog,X__1=='41324')
+d10 <- subset(goog,X__1=='41325')
+s <- list()
+s[[1]] <- as.numeric(d1$X__7)
+s[[2]] <- as.numeric(d2$X__7)
+s[[3]] <- as.numeric(d3$X__7)
+s[[4]] <- as.numeric(d4$X__7)
+s[[5]] <- as.numeric(d5$X__7)
+s[[6]] <- as.numeric(d6$X__7)
+s[[7]] <- as.numeric(d7$X__7)
+s[[8]] <- as.numeric(d8$X__7)
+s[[9]] <- as.numeric(d9$X__7)
+s[[10]] <- as.numeric(d10$X__7)
+```
+
+Realizedd variance is estimated by self-defined function rv.
+```{r rvfunction}
+rv <- function(price,interval){
+  r <- NULL
+  for (i in 1:length(price) - interval){
+    r[i] <- log(price[i + interval]/price[i])
+  } 
+  sum <- sum((na.omit(r))^2/interval)
+  return(sum)
+}
+```
+
+## 1
+```{r Q1}
+rv.q1 <- NULL
+for (i in 1:10){
+  rv.q1[i] <- rv(s[[i]],1)
+}
+print(rv.q1)
+mean(rv.q1)
+```
+## 2
+(a)
+(c)
+The variance estimates decrease as the return interval increases. The ratio of the average (across days) average realized variance based on 15-minute returns to the average (across days) realized variance based on 1-minute returns is 0.0000687/ 0.0000881
+= 0.7800597. The ratio of the average (across days) average realized variance based on 15- minute returns to the average (across days) average realized variance based on 10-minute returns is 0.0000687/0.0000708 = 0.9701889 or just over 97%. Thus, the realized variance estimate seems to stabilize at a return interval of about 15 minutes.
+
+## 3
+
+## 4
