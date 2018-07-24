@@ -1,0 +1,167 @@
+---
+title: "final2018"
+author: "Jiayan"
+date: "5/10/2018"
+output: html_document
+---
+## 2. Copula
+```{r}
+portfolio <- rep(20,100)
+lambda <- c(rep(0.01,10),rep(0.02,10),rep(0.05,10))
+copula.correlation <- 0.20
+T <- 5
+LGD <- 0.6 *10
+N <- 5000
+loss <- NULL
+loss.b <- NULL
+for (i in 1:N){
+  if.default <- rep(0,100)
+  m1 <- rnorm(1)
+  m2 <- rnorm(1)
+  z.good <- 0.5 * m1 + 0.866025 * rnorm(50)
+  z.bad <- 0.6 * m1 + 0.5 * m2 + 0.6245 * rnorm(50)
+  z <- c(z.good,z.bad)
+  for (j in 1:50)
+    if(pnorm(z[j]) < 0.006) if.default[j] <- if.default[j] + 1
+  for (j in 51:100)
+    if(pnorm(z[j]) < 0.015) if.default[j] <- if.default[j] + 1
+  loss[i] <- sum(20 * if.default)
+}
+quantile(loss,0.95)
+```
+```{r default correlation}
+N = 10000
+if.default.A <- rep(0,N) 
+if.default.B <- rep(0,N)
+both.default <- 0
+for (i in 1:N)
+{
+  m1 <- rnorm(1)
+  m2 <- rnorm(1)
+  z.bad.A <- 0.6 * m1 + 0.5 * m2 + 0.6245 * rnorm(1)
+  z.bad.B <- 0.6 * m1 + 0.5 * m2 + 0.6245 * rnorm(1)
+  #for (j in 1:N)
+    if(pnorm(z.bad.A) < 0.015 && if.default.A == 0) if.default.A[i] <- if.default.A[i] + 1
+    if(pnorm(z.bad.B) < 0.015) if.default.B[i] <- if.default.B[i] + 1
+}
+for (j in 1:N){
+  if (if.default.A[j] == 1 && if.default.B[j] == 1)
+  both.default <- both.default +1
+}
+PA=sum(if.default.A)/N
+PB=sum(if.default.B)/N
+(both.default/N - PA*PB)/sqrt(PA*(1-PA)*PB*(1-PB))
+```
+
+```{r GARCH}
+alpha <- 0.1
+  beta <- 0.8
+  sigma <- sqrt(0.0009)
+  sigma1 <- sqrt(0.0009)
+return=NULL
+  for (j in 1:5000){
+    n<-21
+z = rnorm(21)
+R=NULL
+sigma.t = NULL
+
+R[1] <- sigma1 * z[1]
+sigma.t[1] = sqrt(0.0009)
+
+  for (i in 2:n){
+    
+    sigma.t[i] <- sqrt((1-alpha-beta)*sigma1^2+alpha*R[i -1]^2+beta*sigma.t[i-1]^2)
+    R[i] = sigma.t[i] * z[i]
+  }
+return[j]=sum(R)
+  }
+sum(return < -0.12)/5000
+sd(return)
+```
+```{r norm}
+pnorm(-0.12,0,0.138)
+```
+```{r simulation}
+MP <- NULL
+positive.MP <- NULL
+mc.return.EFA <- NULL
+mc.return.IWM <- NULL
+N <- 5000
+for (j in 1:N){
+  alpha1 <- 0.1
+  beta1 <-0.8
+  alpha2 <- 0.1
+  beta2 <- 0.8
+  alpha <- 0.05
+  beta <- 0.9
+
+  #simulate each day's correlation mc.rho
+  mc.rho <- NULL
+  z1 <- NULL
+  z2 <- NULL
+  q11 <- NULL
+  q22 <- NULL
+  q12 <- NULL
+
+  mc.rho[1] <- 0.3
+  z1[1] <- rnorm(1)
+  z2[1] <- mc.rho[1] * z1[1] + sqrt(1 - mc.rho[1]^2) * rnorm(1)
+  q11[1] <- 1
+  q22[1] <- 1
+  q12[1] <- 0.3
+
+  for(t in 1: 21){
+    q12[t + 1] <- rho + alpha * (z1[t] * z2[t] - rho) + beta * (q12[t] - rho)
+    q11[t + 1] <- 1 + alpha * (z1[t]^2 - 1) + beta * (q11[t] - 1)
+    q22[t + 1] <- 1 + alpha * (z2[t]^2 - 1) + beta * (q22[t] - 1)
+    mc.rho[t + 1] <- q12[t + 1] / sqrt(q11[t + 1] * q22[t + 1])
+    z1[t + 1] <- rnorm(1)
+    z2[t + 1] <- mc.rho[t + 1] * z1[t + 1] + sqrt(1 - mc.rho[t + 1]^2) * rnorm(1)
+  }
+
+  #forecast each day's varainces using NGARCH(1,1)
+  mc.sigma.square1 <- NULL
+  mc.sigma.square2 <- NULL
+  sigma1 <- sqrt(0.0009)
+  sigma2 <- sqrt(0.0009)
+  sigma11 <- sqrt(0.0009)
+  sigma12 <- sqrt(0.0009)
+  R1 <- NULL
+  R2 <- NULL
+
+  mc.sigma.square1[1] <- sigma11^2 
+  mc.sigma.square2[1] <- sigma12^2
+  R1[1] <- z1[1] * sqrt(mc.sigma.square1[1])
+  R2[1] <- z2[1] * sqrt(mc.sigma.square2[1])
+
+  for (t in 1: 21){
+    #mc.sigma.square1[t + 1] <- sigma1^2 * (1 - alpha1 * (1 + theta1^2) - beta1) + alpha1 * (R1[t] -  sqrt(mc.sigma.square1[t]))^2 + beta1 * mc.sigma.square1[t]
+    mc.sigma.square1[t + 1] <- (1 - alpha1 - beta1)*sigma11^2 +alpha1*R1[t]^2+ beta1 * sqrt(mc.sigma.square1[t])^2
+    #mc.sigma.square2[t + 1] <- sigma2^2 * (1 - alpha2 * (1 + theta2^2) - beta2) + alpha2 * (R2[t] -sqrt(mc.sigma.square2[t]))^2 + beta2 * mc.sigma.square2[t]
+    mc.sigma.square2[t + 1] <- (1 - alpha2 - beta2)*sigma12^2 +alpha2*R2[t]^2+ beta2 * sqrt(mc.sigma.square2[t])^2
+    R1[t + 1] <- z1[t + 1] * sqrt(mc.sigma.square1[t + 1])
+    R2[t + 1] <- z2[t + 1] * sqrt(mc.sigma.square2[t + 1])
+  }
+    
+  mc.return.EFA[j] <- sum(R1)
+  mc.return.IWM[j] <- sum(R2)
+
+ 
+}
+c1=0
+for (i in 1:N)
+{
+  if (mc.return.EFA[i]< -0.05 && mc.return.IWM[i]< -0.05)
+    c1 =c1+1
+}
+c1/N
+c2=0
+for (i in 1:N)
+{
+  if (mc.return.EFA[i]>0.05 && mc.return.IWM[i]>0.05)
+    c2 =c2+1
+}
+c2/N
+#sum(mc.return.EFA< -0.05 && mc.return.IWM< -0.05)/N
+#sum(mc.return.EFA> 0.05 && mc.return.IWM>0.05)/N
+```
