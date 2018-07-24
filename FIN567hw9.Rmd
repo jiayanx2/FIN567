@@ -1,0 +1,167 @@
+---
+title: "FIN567hw9"
+author: "Liwen Jiang, Huiying Liu, Zixiao Wang, Jiayan Xu, Lingxiang Zhang"
+output: pdf_document
+---
+#Q1
+###(a)
+```{r q1}
+d2 <- -qnorm(0.01,mean=0,sd=1)
+d2
+```
+
+###(b)
+```{r define portfolio}
+portfolio <- NULL
+for (i in 1:50){portfolio[i] = 10}
+```
+```{r 1b}
+loss.1b <- NULL
+for (i in 1:10000){
+  rho <- 0.3
+  m <- rnorm(1)
+  z <- NULL
+  u <- NULL
+  ifdefault <- NULL
+  for (j in 1:50){
+    z[j] <- (sqrt(rho))*m +(sqrt(1 - rho))*rnorm(1)
+    if (z[j] < -2.326348) ifdefault[j] <- 1
+    else ifdefault[j] <- 0
+  }
+  loss.1b[i] <- sum(ifdefault * portfolio * (1 - rbeta(50,2,2))) 
+}
+hist(loss.1b,50,xlab = "Possible Losses")
+```
+
+###(c)
+```{r 1c}
+loss.1c <- NULL
+for (i in 1:10000){
+  rho <- 0.4
+  m <- rnorm(1)
+  z <- NULL
+  u <- NULL
+  ifdefault <- NULL
+  for (j in 1:50){
+    z[j] <- (sqrt(rho))*m +(sqrt(1 - rho))*rnorm(1)
+    if (z[j] < -2.326348) ifdefault[j] <- 1
+    else ifdefault[j] <- 0
+  }
+  loss.1c[i] <- sum(ifdefault * portfolio * (1 - rbeta(50,2,2)))
+}
+hist(loss.1c,50,xlab = "Possible Losses")
+```
+
+#Q2
+
+###(a)
+$$1 - H(m,u) = 1 - \Phi(\frac{m_0^A + au}{\sqrt u}) +  e ^{-2am} \Phi(\frac{- m_0^A + au}{\sqrt u}) = 0.03$$
+
+where $a = 0, u = 1$
+
+```{r 2a}
+m0A <- -qnorm(0.03/2)
+m0A
+```
+
+###(b)
+$$1 - H(m,u) = 1 - \Phi(\frac{m_0^B + au}{\sqrt u}) +  e ^{-2am} \Phi(\frac{- m_0^B + au}{\sqrt u}) = 0.03$$
+
+where $a = 0.05, u = 1$, so $m_0^B = 2.127258$
+
+###(c)
+```{r 2c}
+rho <- 0.3
+both.default <- 0
+h <- 1/100
+N <- 100000
+if.default.A <- rep(0,N)
+if.default.B <- rep(0,N)
+for (i in 1:N){
+  dmA <- NULL
+  dmA0 <- 0
+  dmB <- NULL
+  dmB0 <- 0
+  for (j in 1:100){
+    z1 <- rnorm(100)
+    z2 <- rho * z1 + sqrt(1 - rho * rho) * rnorm(1)
+    if (j == 1){
+      dmA[j] = z1[j] * sqrt(h)
+      dmB[j] = 0.05 * h + z2[j] * sqrt(h)
+    }
+    else{
+      dmA[j] <- dmA[j - 1] + z1[j] * sqrt(h)
+      dmB[j] <- 0.05 * h + dmB[j - 1] + z2[j] * sqrt(h)
+    }
+  }
+  if (sort(dmA)[1] <= -2.17009) if.default.A[i] <- if.default.A[i] + 1
+  if (sort(dmB)[1] <= -2.127258) if.default.B[i] <- if.default.B[i] + 1
+  if (if.default.A[i] == 1 && if.default.B[i] == 1) both.default = both.default + 1
+}
+both.default/N
+```
+
+###(d)
+```{r 2d}
+rho <- 0.3
+both.default <- 0
+h <- 1/100
+N <- 100000
+if.default.A <- rep(0,N)
+if.default.B <- rep(0,N)
+for (i in 1:N){
+  dmA <- NULL
+  dmA0 <- 0
+  dmB <- NULL
+  dmB0 <- 0
+  for (j in 1:100){
+    z1 <- rnorm(100)
+    z2 <- rho * z1 + sqrt(1 - rho * rho) * rnorm(1)
+    if (j == 1){
+      dmA[j] = z1[j] * sqrt(h)
+      dmB[j] = z2[j] * sqrt(h)
+    }
+    else{
+      dmA[j] <- dmA[j - 1] + z1[j] * sqrt(h)
+      dmB[j] <- dmB[j - 1] + z2[j] * sqrt(h)
+    }
+  }
+  if (sort(dmA)[1] <= -2.17009) if.default.A[i] <- if.default.A[i] + 1
+  if (sort(dmB)[1] <= -2.17009) if.default.B[i] <- if.default.B[i] + 1
+  if (if.default.A[i] == 1 && if.default.B[i] == 1) both.default = both.default + 1
+}
+both.default/N
+```
+
+###(e)
+Yes, the joint probabilities that we estimate in (c) and (d) are similiar. So the version of the model with a = 0 is adequate.
+
+#Q3
+```{r 3}
+rho <- 0.3
+all.default <- 0
+h <- 1/100
+N <- 10000
+loss.3 <- NULL
+for (i in 1:N){
+  z <- matrix(ncol = 100,nrow = 50)
+  dm <- matrix(ncol = 100, nrow = 50)
+  ifdefault <- rep(0,50)
+  for (j in 1:100){
+    m <- rnorm(100)
+    for (k in 1:50){
+      z[k,j] <- sqrt(rho) * m[j] + sqrt(1 - rho) * rnorm(1)
+      if (j == 1) dm[k,j] <- z[k,j] * sqrt(h)
+      else dm[k,j] <- dm[k,j - 1] + z[k,j] * sqrt(h)#50 companies
+    }
+  }
+  for (k in 1:50)
+  {
+    if (sort(dm[k,])[1] <= -2.17009) ifdefault[k] <- ifdefault[k] + 1
+  }
+  loss.3[i] <- sum(ifdefault * portfolio * (1 - rbeta(50,2,2)))
+}
+hist(loss.3,50)
+```
+
+```
